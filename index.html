@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bubble Popping Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #e0f7fa;
+            font-family: Arial, sans-serif;
+        }
+
+        canvas {
+            border: 1px solid #0288d1;
+        }
+
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 20px;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        #resetBtn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 16px;
+            padding: 10px;
+            border: none;
+            background-color: #0288d1;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #fadeScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: white;
+            opacity: 0;
+            transition: opacity 5s;
+            z-index: 10;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="score">Score: 0</div>
+    <button id="resetBtn">Reset</button>
+    <canvas id="gameCanvas"></canvas>
+    <div id="fadeScreen"></div>
+    <audio id="popSound" src="pop.mp3"></audio>
+    <audio id="goldenSound" src="golden.mp3"></audio>
+    <img id="bubbleImage" src="bubble.png" style="display: none;">
+    <img id="goldenBubbleImage" src="golden.png" style="display: none;">
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const resetBtn = document.getElementById('resetBtn');
+        const fadeScreen = document.getElementById('fadeScreen');
+        const bubbleImage = document.getElementById('bubbleImage');
+        const goldenBubbleImage = document.getElementById('goldenBubbleImage');
+        const popSound = document.getElementById('popSound');
+        const goldenSound = document.getElementById('goldenSound');
+
+        let score = localStorage.getItem('bubbleGameScore') ? parseInt(localStorage.getItem('bubbleGameScore')) : 0;
+        let showGoldenAlert = localStorage.getItem('showGoldenAlert') !== 'false';
+        let bubbles = [];
+        let particles = [];
+        const bubbleSize = 50;
+        const goldenBubbleSize = 50;
+        const goldenBubbleTaps = 10;
+        let goldenBubbleTapCount = 0;
+        let goldenBubbles = [];
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        function drawBubble(x, y) {
+            ctx.drawImage(bubbleImage, x, y, bubbleSize, bubbleSize);
+        }
+
+        function drawGoldenBubble(x, y, size) {
+            ctx.drawImage(goldenBubbleImage, x, y, size, size);
+        }
+
+        function spawnBubble() {
+            const x = Math.random() * (canvas.width - bubbleSize);
+            const y = Math.random() * (canvas.height - bubbleSize);
+            bubbles.push({ x, y });
+        }
+
+        function spawnGoldenBubble() {
+            const x = Math.random() * (canvas.width - goldenBubbleSize);
+            const y = Math.random() * (canvas.height - goldenBubbleSize);
+            goldenBubbles.push({ x, y, size: goldenBubbleSize });
+        }
+
+        function updateScore() {
+            scoreElement.textContent = `Score: ${score}`;
+            localStorage.setItem('bubbleGameScore', score);
+        }
+
+        function resetGame() {
+            if (confirm("Are you sure you want to reset your progress?")) {
+                score = 0;
+                bubbles = [];
+                goldenBubbles = [];
+                particles = [];
+                updateScore();
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function checkCollision(x, y, bubble, size) {
+            return x > bubble.x && x < bubble.x + size && y > bubble.y && y < bubble.y + size;
+        }
+
+        function playPopSound() {
+            const sound = document.createElement('audio');
+            sound.src = 'pop.mp3';
+            sound.play();
+        }
+
+        function playGoldenSound() {
+            const sound = document.createElement('audio');
+            sound.src = 'golden.mp3';
+            sound.play();
+        }
+
+        function createParticles(x, y) {
+            for (let i = 0; i < 10; i++) {
+                particles.push({
+                    x: x + bubbleSize / 2,
+                    y: y + bubbleSize / 2,
+                    radius: Math.random() * 5 + 2,
+                    vx: Math.random() * 4 - 2,
+                    vy: Math.random() * 4 - 2,
+                    alpha: 1
+                });
+            }
+        }
+
+        function drawParticles() {
+            particles.forEach((particle, index) => {
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.alpha -= 0.02;
+                if (particle.alpha <= 0) {
+                    particles.splice(index, 1);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 0, 0, ${particle.alpha})`;
+                    ctx.fill();
+                    ctx.closePath();
+                }
+            });
+        }
+
+        function handleGoldenBubbleTap(goldenBubble) {
+            if (showGoldenAlert) {
+                const dontShowAgain = confirm("Congratulations! You found a golden bubble! Click OK to pop it. Check 'Don't show this message again' if you don't want to see this message again.");
+                if (dontShowAgain) {
+                    localStorage.setItem('showGoldenAlert', 'false');
+                    showGoldenAlert = false;
+                }
+            }
+
+            goldenBubbleTapCount++;
+            goldenBubble.size += 35;
+
+            if (goldenBubbleTapCount >= goldenBubbleTaps) {
+                playGoldenSound();
+                goldenBubbleTapCount = 0;
+                goldenBubbles = goldenBubbles.filter(gb => gb !== goldenBubble);
+                score += 100;
+                updateScore();
+
+                fadeScreen.style.opacity = 1;
+                setTimeout(() => {
+                    fadeScreen.style.opacity = 0;
+                    alert("Successfully gave you 100 score for obtaining golden bubble");
+                }, 5000);
+            }
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            bubbles.forEach((bubble, index) => {
+                if (checkCollision(mouseX, mouseY, bubble, bubbleSize)) {
+                    bubbles.splice(index, 1);
+                    score++;
+                    playPopSound();
+                    createParticles(bubble.x, bubble.y);
+                    updateScore();
+
+                    if (Math.random() < 0.01) {
+                        spawnGoldenBubble();
+                    }
+                }
+            });
+
+            goldenBubbles.forEach((goldenBubble) => {
+                if (checkCollision(mouseX, mouseY, goldenBubble, goldenBubble.size)) {
+                    handleGoldenBubbleTap(goldenBubble);
+                }
+            });
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            bubbles.forEach(bubble => drawBubble(bubble.x, bubble.y));
+            goldenBubbles.forEach(goldenBubble => drawGoldenBubble(goldenBubble.x, goldenBubble.y, goldenBubble.size));
+            drawParticles();
+        });
+
+        resetBtn.addEventListener('click', resetGame);
+
+        function gameLoop() {
+            if (bubbles.length < 5) {
+                spawnBubble();
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            bubbles.forEach(bubble => drawBubble(bubble.x, bubble.y));
+            goldenBubbles.forEach(goldenBubble => drawGoldenBubble(goldenBubble.x, goldenBubble.y, goldenBubble.size));
+            drawParticles();
+            requestAnimationFrame(gameLoop);
+        }
+
+        updateScore();
+        gameLoop();
+    </script>
+</body>
+</html>
